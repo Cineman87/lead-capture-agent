@@ -11,7 +11,7 @@ LEADS_FILE = os.path.join(os.path.dirname(__file__), "leads.csv")
 
 NOTIFY_EMAIL = "cineman1987@gmail.com"
 SMTP_USER = "cineman1987@gmail.com"
-SMTP_PASS = "mwzc wxhm vbgh qmvi"
+SMTP_PASS = os.environ.get("SMTP_PASS")
 
 def init_csv():
     if not os.path.exists(LEADS_FILE):
