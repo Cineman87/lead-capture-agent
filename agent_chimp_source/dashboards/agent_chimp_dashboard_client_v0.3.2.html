@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Chimp Dashboard</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0d1117; color:#c9d1d9; font-family:"Segoe UI",system-ui,monospace; padding:20px; }
+
+  .header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:20px 24px; background:#161b22; border:1px solid #30363d;
+    border-radius:10px; margin-bottom:20px;
+  }
+  .logo  { font-size:1.6em; font-weight:700; color:#58a6ff; letter-spacing:-0.5px; }
+  .client{ font-size:0.9em; color:#8b949e; margin-top:4px; }
+
+  .stats { display:flex; gap:16px; }
+  .stat  {
+    text-align:center; padding:10px 22px;
+    background:#21262d; border-radius:8px; border:1px solid #30363d;
+  }
+  .stat .n { font-size:2em; font-weight:700; }
+  .stat.on  .n { color:#3fb950; }
+  .stat.off .n { color:#f85149; }
+  .stat .lbl { font-size:0.75em; color:#8b949e; margin-top:2px; }
+
+  .meta { display:flex; justify-content:space-between; color:#8b949e; font-size:0.82em; margin-bottom:16px; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+
+  .card {
+    background:#161b22; border:1px solid #30363d; border-radius:8px;
+    padding:16px; border-left:3px solid #30363d; transition:border-color .2s;
+  }
+  .card.online  { border-left-color:#3fb950; }
+  .card.offline { border-left-color:#f85149; }
+  .card.error   { border-left-color:#d29922; }
+
+  .card-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .name  { font-weight:600; font-size:1.05em; color:#e6edf3; }
+
+  .dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .dot.online  { background:#3fb950; box-shadow:0 0 6px #3fb950aa; }
+  .dot.offline { background:#484f58; }
+  .dot.error   { background:#d29922; }
+
+  .info  { font-size:0.82em; color:#8b949e; line-height:1.7; }
+  .badge {
+    display:inline-block; padding:1px 7px; border-radius:4px;
+    font-size:0.78em; font-weight:600;
+  }
+  .badge.online  { background:#1f4a2a; color:#3fb950; }
+  .badge.offline { background:#2d1e1e; color:#f85149; }
+  .badge.error   { background:#2d2207; color:#d29922; }
+
+  .empty { text-align:center; padding:60px; color:#484f58; grid-column:1/-1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="logo">&#x1F412; Agent Chimp</div>
+    <div class="client" id="client-label">Loading&hellip;</div>
+  </div>
+  <div class="stats">
+    <div class="stat on">  <div class="n" id="cnt-on">0</div>  <div class="lbl">Online</div></div>
+    <div class="stat off"> <div class="n" id="cnt-off">0</div> <div class="lbl">Offline</div></div>
+  </div>
+</div>
+
+<div class="meta">
+  <span>Backend: <strong id="api-url">http://localhost:5000</strong></span>
+  <span>Refresh in <span id="cd">10</span>s &nbsp;|&nbsp; Updated: <span id="ts">--</span></span>
+</div>
+
+<div class="grid" id="grid">
+  <div class="empty">Connecting to backend&hellip;</div>
+</div>
+
+<script>
+// Change this if your backend runs on a different port
+const API = "http://localhost:5000";
+document.getElementById("api-url").textContent = API;
+
+let cd = 10;
+
+function ago(iso) {
+  if (!iso) return "never";
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60)   return s + "s ago";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  return Math.floor(s / 3600) + "h ago";
+}
+
+async function refresh() {
+  try {
+    const res  = await fetch(API + "/agents");
+    const data = await res.json();
+    const now  = Date.now();
+
+    // Consider agents offline if no check-in in last 90s
+    data.forEach(a => {
+      if (a.last_checkin) {
+        const stale = (now - new Date(a.last_checkin).getTime()) / 1000 > 90;
+        if (stale && a.status === "online") a.status = "offline";
+      }
+    });
+
+    const on  = data.filter(a => a.status === "online").length;
+    const off = data.length - on;
+    document.getElementById("cnt-on").textContent  = on;
+    document.getElementById("cnt-off").textContent = off;
+
+    if (data.length > 0) {
+      document.getElementById("client-label").textContent =
+        data[0].client_name + " — " + data.length +
+        " agent" + (data.length !== 1 ? "s" : "") + " assigned";
+    }
+
+    const grid = document.getElementById("grid");
+    if (data.length === 0) {
+      grid.innerHTML = "<div class='empty'>No agents registered yet.</div>";
+    } else {
+      grid.innerHTML = data.map(a => `
+        <div class="card ${a.status}">
+          <div class="card-head">
+            <span class="name">${a.agent_name}</span>
+            <span class="dot ${a.status}"></span>
+          </div>
+          <div class="info">
+            <span class="badge ${a.status}">${a.status.toUpperCase()}</span><br>
+            Last seen: ${ago(a.last_checkin)}<br>
+            Client: ${a.client_name}<br>
+            Version: v${a.version || "0.3"}
+          </div>
+        </div>`).join("");
+    }
+    document.getElementById("ts").textContent = new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById("grid").innerHTML =
+      "<div class='empty'>&#9888; Cannot reach backend at " + API + "</div>";
+  }
+}
+
+function tick() {
+  cd--;
+  document.getElementById("cd").textContent = cd;
+  if (cd <= 0) { cd = 10; refresh(); }
+}
+
+refresh();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
