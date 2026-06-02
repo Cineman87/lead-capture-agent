@@ -1,8 +1,13 @@
 """
 Minimal runnable example of HermesContextManager.
 
-Set ANTHROPIC_API_KEY and OBSIDIAN_VAULT_PATH before running:
+Anthropic cloud:
     export ANTHROPIC_API_KEY=sk-ant-...
+    export OBSIDIAN_VAULT_PATH="/path/to/MyVault/Hermes Sessions"
+    python hermes_example.py
+
+Local server (Ollama, LM Studio, llama.cpp, etc.):
+    export ANTHROPIC_BASE_URL=http://localhost:11434  # or :1234 for LM Studio
     export OBSIDIAN_VAULT_PATH="/path/to/MyVault/Hermes Sessions"
     python hermes_example.py
 """
@@ -14,10 +19,19 @@ from hermes import HermesContextManager
 def main() -> None:
     vault = os.environ.get("OBSIDIAN_VAULT_PATH", "/tmp/hermes-vault/Sessions")
 
+    # local_model is only needed when talking to a local server;
+    # leave as None to use the default Claude model against the Anthropic API.
+    local_model = os.environ.get("HERMES_MODEL")
+
     ctx = HermesContextManager(
         vault_path=vault,
         context_limit=200_000,   # tokens before compression fires
         threshold=0.80,          # fire at 80 % of the limit
+        # base_url and summary_model are picked up from env vars automatically;
+        # pass them explicitly here if you prefer:
+        #   base_url="http://localhost:11434",
+        #   summary_model="llama3",
+        summary_model=local_model,
     )
 
     # ----------------------------------------------------------------

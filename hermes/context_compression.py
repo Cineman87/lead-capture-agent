@@ -99,8 +99,16 @@ class HermesContextManager:
         Fraction of context_limit at which auto-compression fires (default 0.80).
     api_key:
         Anthropic API key.  Falls back to the ANTHROPIC_API_KEY env var.
+        Pass any non-empty string (e.g. "local") when using a local server
+        that does not require a real key.
+    base_url:
+        Override the API base URL.  Use this to point at a local server such
+        as Ollama (http://localhost:11434) or LM Studio (http://localhost:1234).
+        Falls back to the ANTHROPIC_BASE_URL env var, then the default
+        Anthropic endpoint.
     summary_model:
-        Claude model used to generate compression summaries.
+        Model identifier forwarded to the API.  When using a local server,
+        set this to whatever model name that server exposes (e.g. "llama3").
     """
 
     _SUMMARY_MODEL = "claude-sonnet-4-6"
@@ -112,14 +120,21 @@ class HermesContextManager:
         context_limit: int = 200_000,
         threshold: float = 0.80,
         api_key: str | None = None,
+        base_url: str | None = None,
         summary_model: str | None = None,
     ) -> None:
         self.vault_path = Path(vault_path)
         self.context_limit = context_limit
         self.threshold = threshold
-        self._client = anthropic.Anthropic(
-            api_key=api_key or os.environ.get("ANTHROPIC_API_KEY")
-        )
+
+        resolved_base_url = base_url or os.environ.get("ANTHROPIC_BASE_URL")
+        client_kwargs: dict = {
+            "api_key": api_key or os.environ.get("ANTHROPIC_API_KEY", "local"),
+        }
+        if resolved_base_url:
+            client_kwargs["base_url"] = resolved_base_url
+
+        self._client = anthropic.Anthropic(**client_kwargs)
         if summary_model:
             self._SUMMARY_MODEL = summary_model
 
